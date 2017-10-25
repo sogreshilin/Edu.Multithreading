@@ -44,16 +44,6 @@ void* compute_pi(void *arg) {
 }
 
 
-void print_results(threads_data_t* data, int thread_count, double pi) {
-    for (int i = 0; i < thread_count; ++i) {
-        printf("[thread-%d]: result = %.15f\n", data[i].thread_id,
-               data[i].result);
-    }
-    printf("--------------\n");
-    printf("pi = %.15f\n", pi);
-}
-
-
 int start_all_threads(pthread_t* threads, threads_data_t* data, int thread_count) {
     for (int i = 0; i < thread_count; ++i) {
         int code = pthread_create(threads + i, DEFAULT_ATTR, compute_pi,
@@ -105,7 +95,7 @@ int main(int argc, const char *argv[]) {
     }
 
     /* Printing results of each thread and total */
-    print_results(threads_data, thread_count, pi);
+    printf("pi = %.15f\n", pi);
 
     /* Freeing allocated memory and terminating the process */
     free_threads_data(threads_data);
