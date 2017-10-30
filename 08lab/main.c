@@ -36,24 +36,24 @@ void set_global_max_iter_if_greater(long iter_count) {
  * Threads data type: constructor, setter and destructor.
  ****************************************************************************/
 
-typedef struct threads_data_s {
+typedef struct thread_workload_s {
     int thread_id;
     int thread_count;
     double result;
-} threads_data_t;
+} thread_workload_t;
 
-threads_data_t* allocate_threads_data(int thread_count) {
-    return (threads_data_t*)malloc(thread_count * sizeof(threads_data_t));
+thread_workload_t* allocate_threads_workload(int thread_count) {
+    return (thread_workload_t*)malloc(thread_count * sizeof(thread_workload_t));
 }
 
-void free_threads_data(void* ptr) {
+void free_threads_workload(void* ptr) {
     free(ptr);
 }
 
-void fill_threads_data(threads_data_t* threads_data, int thread_count) {
+void fill_threads_workload(thread_workload_t* threads_workload, int thread_count) {
     for (int i = 0; i < thread_count; ++i) {
-        threads_data[i].thread_id = i;
-        threads_data[i].thread_count = thread_count;
+        threads_workload[i].thread_id = i;
+        threads_workload[i].thread_count = thread_count;
     }
 }
 
@@ -61,11 +61,11 @@ void fill_threads_data(threads_data_t* threads_data, int thread_count) {
  * Threads routine functions.
  ****************************************************************************/
 
-double finish_computing_pi(long iter_count, threads_data_t* thread_data) {
+double finish_computing_pi(long iter_count, thread_workload_t* thread_workload) {
     set_global_max_iter_if_greater(iter_count);
     pthread_barrier_wait(&global_barrier);
-    int id = thread_data->thread_id;
-    int num_threads = thread_data->thread_count;
+    int id = thread_workload->thread_id;
+    int num_threads = thread_workload->thread_count;
     int index = id + iter_count * num_threads;
     double result = 0;
 
@@ -79,9 +79,9 @@ double finish_computing_pi(long iter_count, threads_data_t* thread_data) {
 }
 
 void* compute_pi(void *arg) {
-    threads_data_t *thread_data = (threads_data_t*)arg;
-    int id = thread_data->thread_id;
-    int num_threads = thread_data->thread_count;
+    thread_workload_t *thread_workload = (thread_workload_t*)arg;
+    int id = thread_workload->thread_id;
+    int num_threads = thread_workload->thread_count;
 
     long iter_count = 0;
     double result = 0;
@@ -90,8 +90,8 @@ void* compute_pi(void *arg) {
         ++iter_count;
 
         if (global_state == STOPPED && iter_count % MIN_ITER_COUNT == 0) {
-            result += finish_computing_pi(iter_count, thread_data);
-            thread_data->result = result;
+            result += finish_computing_pi(iter_count, thread_workload);
+            thread_workload->result = result;
             pthread_exit(arg);
         }
 
@@ -104,11 +104,11 @@ void* compute_pi(void *arg) {
  * Threads managing functions: start, gather.
  ****************************************************************************/
 
-int start_all_threads(pthread_t* threads, threads_data_t* data,
+int start_all_threads(pthread_t* threads, thread_workload_t* thread_workload,
         int thread_count) {
     for (int i = 0; i < thread_count; ++i) {
         int code = pthread_create(threads + i, DEFAULT_ATTR, compute_pi,
-                                  (void*)(data + i));
+                                  (void*)(thread_workload + i));
         if (code != SUCCESS) {
             return code;
         }
@@ -119,12 +119,12 @@ int start_all_threads(pthread_t* threads, threads_data_t* data,
 int gather_pi_value(pthread_t* threads, int thread_count, double* result) {
     double pi = 0;
     for (int i = 0; i < thread_count; ++i) {
-        threads_data_t* threads_data;
-        int code = pthread_join(threads[i], (void*)&threads_data);
+        thread_workload_t* threads_workload;
+        int code = pthread_join(threads[i], (void*)&threads_workload);
         if (code != SUCCESS) {
             return code;
         }
-        pi += threads_data->result;
+        pi += threads_workload->result;
     }
     pi *= 4;
     *result = pi;
@@ -174,7 +174,7 @@ int parse_thread_count(const char* string_value, int* result) {
 typedef struct cleanup_data_s {
     pthread_mutex_t* mutex;
     pthread_barrier_t* barrier;
-    threads_data_t* threads_data;
+    thread_workload_t* threads_workload;
 } cleanup_data_t;
 
 void cleanup_routine(void* arg) {
@@ -188,8 +188,8 @@ void cleanup_routine(void* arg) {
         code = pthread_barrier_destroy(cleanup_data->barrier);
         log_if_error(code, "Unable to destroy barrier\n");
     }
-    if (cleanup_data->threads_data != NULL) {
-        free_threads_data(cleanup_data->threads_data);
+    if (cleanup_data->threads_workload != NULL) {
+        free_threads_workload(cleanup_data->threads_workload);
     }
 }
 
@@ -227,17 +227,17 @@ int main(int argc, const char *argv[]) {
     }
     cleanup_data.barrier = &global_barrier;
 
-    threads_data_t *threads_data = allocate_threads_data(thread_count);
-    if (threads_data == NULL) {
+    thread_workload_t *threads_workload = allocate_threads_workload(thread_count);
+    if (threads_workload == NULL) {
         log_error("Unable to allocate threads data", ENOMEM);
         exit_with_cleanup(EXIT_FAILURE, cleanup_routine, (void*) &cleanup_data);
     }
-    cleanup_data.threads_data = threads_data;
+    cleanup_data.threads_workload = threads_workload;
 
-    fill_threads_data(threads_data, thread_count);
+    fill_threads_workload(threads_workload, thread_count);
 
     pthread_t threads[thread_count];
-    code = start_all_threads(threads, threads_data, thread_count);
+    code = start_all_threads(threads, threads_workload, thread_count);
     if (code != SUCCESS) {
         log_error("Unable to start threads", code);
         exit_with_cleanup(EXIT_FAILURE, cleanup_routine, (void*) &cleanup_data);
