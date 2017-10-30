@@ -212,7 +212,7 @@ int main(int argc, const char *argv[]) {
         exit_with_custom_message("Unable to set signal handler", EXIT_FAILURE);
     }
 
-    cleanup_data_t cleanup_data;
+    cleanup_data_t cleanup_data = { NULL, NULL, NULL };
 
     code = pthread_mutex_init(&global_mutex, DEFAULT_ATTR);
     if (code == ENOMEM) {
