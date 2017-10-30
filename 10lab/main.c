@@ -55,8 +55,7 @@ int main() {
     pthread_mutexattr_t attributes;
     int code = pthread_mutexattr_init(&attributes);
     if (code != SUCCESS) {
-        exit_with_custom_message("Unable to initialize mutex \
-            attributes object", code);
+        exit_with_custom_message("Unable to initialize mutex attributes object", code);
     }
     cleanup_data_t cleanup_data = { &attributes, NO_INITIALIZED_MUTEXES };
     pthread_mutexattr_settype(&attributes, PTHREAD_MUTEX_ERRORCHECK);
