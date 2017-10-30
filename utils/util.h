@@ -3,6 +3,7 @@
 
 #define NO_CLEANUP NULL
 #define NO_ARG NULL
+#define NO_RETURN_VALUE NULL
 #define DEFAULT_ATTR NULL
 #define SUCCESS 0
 
