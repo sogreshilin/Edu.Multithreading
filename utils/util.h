@@ -6,6 +6,7 @@
 #define NO_RETURN_VALUE NULL
 #define DEFAULT_ATTR NULL
 #define SUCCESS 0
+#define FAILURE 1
 
 
 /*

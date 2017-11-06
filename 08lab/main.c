@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <limits.h>
 #include "../utils/util.h"
 
 const int ITER_COUNT = 2e7;
@@ -22,9 +23,9 @@ pthread_barrier_t global_barrier;
  * Global data. Setter is a critical section.
  ****************************************************************************/
 
-long global_max_iter;
+int global_max_iter;
 
-void set_global_max_iter_if_greater(long iter_count) {
+void set_global_max_iter_if_greater(int iter_count) {
     pthread_mutex_lock(&global_mutex);
     if (iter_count > global_max_iter) {
         global_max_iter = iter_count;
@@ -61,12 +62,12 @@ void fill_threads_workload(thread_workload_t* threads_workload, int thread_count
  * Threads routine functions.
  ****************************************************************************/
 
-double finish_computing_pi(long iter_count, thread_workload_t* thread_workload) {
+double finish_computing_pi(int iter_count, thread_workload_t* thread_workload) {
     set_global_max_iter_if_greater(iter_count);
     pthread_barrier_wait(&global_barrier);
     int id = thread_workload->thread_id;
     int num_threads = thread_workload->thread_count;
-    long index = id + iter_count * num_threads;
+    int index = id + iter_count * num_threads;
     double result = 0;
 
     for ( ;iter_count < global_max_iter; ++iter_count) {
@@ -82,14 +83,16 @@ void* compute_pi(void *arg) {
     thread_workload_t *thread_workload = (thread_workload_t*)arg;
     int id = thread_workload->thread_id;
     int num_threads = thread_workload->thread_count;
+    const int MAX_ITER_COUNT = INT_MAX / num_threads;
 
-    long iter_count = 0;
+    int iter_count = 0;
     double result = 0;
 
-    for (long index = id; ; index += num_threads) {
+    for (int index = id; ; index += num_threads) {
         ++iter_count;
 
-        if (global_state == STOPPED && iter_count % MIN_ITER_COUNT == 0) {
+        if ((global_state == STOPPED && iter_count % MIN_ITER_COUNT == 0) ||
+                (iter_count == MAX_ITER_COUNT)) {
             result += finish_computing_pi(iter_count, thread_workload);
             thread_workload->result = result;
             pthread_exit(arg);
@@ -98,37 +101,6 @@ void* compute_pi(void *arg) {
         result += 1.0/(index * 4.0 + 1.0);
         result -= 1.0/(index * 4.0 + 3.0);
     }
-}
-
-/*****************************************************************************
- * Threads managing functions: start, gather.
- ****************************************************************************/
-
-int start_all_threads(pthread_t* threads, thread_workload_t* thread_workload,
-        int thread_count) {
-    for (int i = 0; i < thread_count; ++i) {
-        int code = pthread_create(threads + i, DEFAULT_ATTR, compute_pi,
-                                  (void*)(thread_workload + i));
-        if (code != SUCCESS) {
-            return code;
-        }
-    }
-    return SUCCESS;
-}
-
-int gather_pi_value(pthread_t* threads, int thread_count, double* result) {
-    double pi = 0;
-    for (int i = 0; i < thread_count; ++i) {
-        thread_workload_t* threads_workload;
-        int code = pthread_join(threads[i], (void*)&threads_workload);
-        if (code != SUCCESS) {
-            return code;
-        }
-        pi += threads_workload->result;
-    }
-    pi *= 4;
-    *result = pi;
-    return SUCCESS;
 }
 
 /*****************************************************************************
@@ -156,7 +128,7 @@ void print_usage() {
 int parse_thread_count(const char* string_value, int* result) {
     char* end_pointer;
     errno = 0;
-    long thread_count = strtol(string_value, &end_pointer, BASE);
+    int thread_count = strtol(string_value, &end_pointer, BASE);
     if (errno == EINVAL || errno == ERANGE) {
         return EINVAL;
     }
@@ -164,6 +136,42 @@ int parse_thread_count(const char* string_value, int* result) {
         return EINVAL;
     }
     *result = (int) thread_count;
+    return SUCCESS;
+}
+
+/*****************************************************************************
+ * Threads managing functions: start, gather.
+ ****************************************************************************/
+
+int start_all_threads(pthread_t* threads, thread_workload_t* thread_workload,
+        int thread_count) {
+    int code = set_signal_handler();
+    if (code != SUCCESS) {
+        log_error("Unable to set signal handler", code);
+        return code;
+    }
+    for (int i = 0; i < thread_count; ++i) {
+        code = pthread_create(threads + i, DEFAULT_ATTR, compute_pi,
+                                  (void*)(thread_workload + i));
+        if (code != SUCCESS) {
+            return code;
+        }
+    }
+    return SUCCESS;
+}
+
+int gather_pi_value(pthread_t* threads, int thread_count, double* result) {
+    double pi = 0;
+    for (int i = 0; i < thread_count; ++i) {
+        thread_workload_t* threads_workload;
+        int code = pthread_join(threads[i], (void*)&threads_workload);
+        if (code != SUCCESS) {
+            return code;
+        }
+        pi += threads_workload->result;
+    }
+    pi *= 4;
+    *result = pi;
     return SUCCESS;
 }
 
@@ -188,13 +196,31 @@ void cleanup_routine(void* arg) {
     }
 }
 
+int prepare_data(int thread_count, thread_workload_t** threads_workload,
+        cleanup_data_t* cleanup_data) {
+    int code = pthread_barrier_init(&global_barrier, DEFAULT_ATTR, thread_count);
+    if (code != SUCCESS) {
+        log_error("Unable to initialize barrier", code);
+        return code;
+    }
+    cleanup_data->barrier = &global_barrier;
+
+    *threads_workload = allocate_threads_workload(thread_count);
+    if (threads_workload == NULL) {
+        log_error("Unable to allocate threads data", ENOMEM);
+        return FAILURE;
+    }
+    cleanup_data->threads_workload = *threads_workload;
+    fill_threads_workload(*threads_workload, thread_count);
+    return SUCCESS;
+}
+
 
 int main(int argc, const char *argv[]) {
     if (argc != ARGS_REQUIRED) {
         print_usage();
         exit(EXIT_FAILURE);
     }
-
     int thread_count;
     int code = parse_thread_count(argv[1], &thread_count);
     if (code != SUCCESS) {
@@ -202,25 +228,12 @@ int main(int argc, const char *argv[]) {
             a positive number", EXIT_FAILURE);
     }
 
-    code = set_signal_handler();
+    cleanup_data_t cleanup_data;
+    thread_workload_t *threads_workload;
+    code = prepare_data(thread_count, &threads_workload, &cleanup_data);
     if (code != SUCCESS) {
-        exit_with_custom_message("Unable to set signal handler", EXIT_FAILURE);
-    }
-
-    cleanup_data_t cleanup_data = { NULL, NULL };
-    code = pthread_barrier_init(&global_barrier, DEFAULT_ATTR, thread_count);
-    if (code == EAGAIN || code == EINVAL || code == ENOMEM) {
-        exit_with_custom_message("Unable to initialize barrier", code);
-    }
-    cleanup_data.barrier = &global_barrier;
-
-    thread_workload_t *threads_workload = allocate_threads_workload(thread_count);
-    if (threads_workload == NULL) {
-        log_error("Unable to allocate threads data", ENOMEM);
         exit_with_cleanup(EXIT_FAILURE, cleanup_routine, (void*) &cleanup_data);
     }
-    cleanup_data.threads_workload = threads_workload;
-    fill_threads_workload(threads_workload, thread_count);
 
     pthread_t threads[thread_count];
     code = start_all_threads(threads, threads_workload, thread_count);
@@ -237,6 +250,5 @@ int main(int argc, const char *argv[]) {
     }
 
     printf("\npi = %.15f\n", pi);
-    cleanup_routine((void*) &cleanup_data);
-    exit(EXIT_SUCCESS);
+    exit_with_cleanup(EXIT_SUCCESS, cleanup_routine, (void*) &cleanup_data);
 }
