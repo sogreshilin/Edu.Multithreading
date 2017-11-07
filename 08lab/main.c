@@ -5,7 +5,6 @@
 #include <string.h>
 #include <signal.h>
 #include <limits.h>
-#include <float.h>
 #include "../utils/util.h"
 
 const int ITER_COUNT = 2e7;
@@ -47,9 +46,6 @@ int get_global_max_iter() {
     pthread_mutex_unlock(&global_mutex);
     return max_iter;
 }
-
-
-
 
 /*****************************************************************************
  * Threads data type: constructor, setter and destructor.
