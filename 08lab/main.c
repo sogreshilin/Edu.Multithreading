@@ -13,12 +13,19 @@ const int MIN_ITER_COUNT = 1e6;
 const int ARGS_REQUIRED = 2;
 const int BASE = 0;
 
-enum program_state { RUNNING, STOPPED };
-
-int global_state = RUNNING;
-
 pthread_mutex_t global_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_barrier_t global_barrier;
+
+/*****************************************************************************
+ * Program global state functions.
+ ****************************************************************************/
+
+typedef enum { RUNNING, STOPPED } program_state_t;
+program_state_t global_state = RUNNING;
+
+void set_global_state(program_state_t state) {
+    global_state = state;
+}
 
 /*****************************************************************************
  * Global data. Setter is a critical section.
@@ -40,6 +47,9 @@ int get_global_max_iter() {
     pthread_mutex_unlock(&global_mutex);
     return max_iter;
 }
+
+
+
 
 /*****************************************************************************
  * Threads data type: constructor, setter and destructor.
@@ -119,15 +129,15 @@ void* compute_pi(void *arg) {
  * Util functions.
  ****************************************************************************/
 
- void set_state_to_stop(int signal_number) {
+ void handle_signal(int signal_number) {
      if (signal_number == SIGINT) {
-         global_state = STOPPED;
+         set_global_state(STOPPED);
      }
  }
 
 int set_signal_handler() {
     errno = 0;
-    if (signal(SIGINT, set_state_to_stop) == SIG_ERR) {
+    if (signal(SIGINT, handle_signal) == SIG_ERR) {
         return errno;
     }
     return SUCCESS;
