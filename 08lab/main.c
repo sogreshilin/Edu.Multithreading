@@ -27,7 +27,7 @@ void set_global_state(program_state_t state) {
 }
 
 /*****************************************************************************
- * Global data. Setter is a critical section.
+ * Global data. Setter and getter are critical sections.
  ****************************************************************************/
 
 int global_max_iter;
