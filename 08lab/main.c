@@ -105,9 +105,6 @@ void* compute_pi(void *arg) {
     for (int index = id; ; index += num_threads) {
         ++iter_count;
 
-        if (iter_count == MAX_ITER_COUNT) {
-            printf("%.15f\n", index * 4.0 + 3.0);
-        }
         if ((global_state == STOPPED && iter_count % MIN_ITER_COUNT == 0) ||
                 (iter_count == MAX_ITER_COUNT)) {
             result += finish_computing_pi(iter_count, thread_workload);
