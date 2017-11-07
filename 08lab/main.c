@@ -5,6 +5,7 @@
 #include <string.h>
 #include <signal.h>
 #include <limits.h>
+#include <float.h>
 #include "../utils/util.h"
 
 const int ITER_COUNT = 2e7;
@@ -31,6 +32,13 @@ void set_global_max_iter_if_greater(int iter_count) {
         global_max_iter = iter_count;
     }
     pthread_mutex_unlock(&global_mutex);
+}
+
+int get_global_max_iter() {
+    pthread_mutex_lock(&global_mutex);
+    int max_iter = global_max_iter;
+    pthread_mutex_unlock(&global_mutex);
+    return max_iter;
 }
 
 /*****************************************************************************
@@ -69,8 +77,8 @@ double finish_computing_pi(int iter_count, thread_workload_t* thread_workload) {
     int num_threads = thread_workload->thread_count;
     int index = id + iter_count * num_threads;
     double result = 0;
-
-    for ( ;iter_count < global_max_iter; ++iter_count) {
+    double local_max_iter = get_global_max_iter();
+    for ( ;iter_count < local_max_iter; ++iter_count) {
         result += 1.0/(index * 4.0 + 1.0);
         result -= 1.0/(index * 4.0 + 3.0);
         index += num_threads;
@@ -91,6 +99,9 @@ void* compute_pi(void *arg) {
     for (int index = id; ; index += num_threads) {
         ++iter_count;
 
+        if (iter_count == MAX_ITER_COUNT) {
+            printf("%.15f\n", index * 4.0 + 3.0);
+        }
         if ((global_state == STOPPED && iter_count % MIN_ITER_COUNT == 0) ||
                 (iter_count == MAX_ITER_COUNT)) {
             result += finish_computing_pi(iter_count, thread_workload);
@@ -100,6 +111,7 @@ void* compute_pi(void *arg) {
 
         result += 1.0/(index * 4.0 + 1.0);
         result -= 1.0/(index * 4.0 + 3.0);
+
     }
 }
 
