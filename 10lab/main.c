@@ -58,9 +58,14 @@ void print_text_synchronously(char* string, int initial_mutex_id, int from, int 
 void* thread_routine(void* arg) {
     /*
      * Lock this mutex to let parent know that this child thread has started
-     * its routine.
+     * its routine. Also print_text_synchronously() function needs one mutex
+     * to be locked before entering it.
      */
     pthread_mutex_lock(global_mutexes + 2);
+
+    /*
+     * The mutex 2 is already locked (needed by the function contract).
+     */
     print_text_synchronously((char*) arg, CHILD_INITIAL_MUTEX_ID, 0, LINES_COUNT);
     pthread_exit(NO_RETURN_VALUE);
 }
@@ -102,7 +107,8 @@ int main() {
     /*
      * Lock this mutex to make sure that child won't start printing  before
      * parent. Child's first string will only be printed when child locks
-     * 0 and 2 mutex.
+     * 0 and 2 mutex. Need this mutex to be locked to enter the
+     * print_text_synchronously() function.
      */
     pthread_mutex_lock(global_mutexes + 0);
 
@@ -128,11 +134,8 @@ int main() {
     }
 
     /*
-     * Calling function with second argument PARENT_INITIAL_MUTEX_ID
-     * which means that on the i-th iteration parent will lock
-     * (PARENT_INITIAL_MUTEX_ID + i) mutex, print text and unlock
-     * the other locked mutex with
-     * id = (PARENT_INITIAL_MUTEX_ID + i + MUTEX_COUNT - 1) % MUTEX_COUNT.
+     * Calling function with second argument PARENT_INITIAL_MUTEX_ID.
+     * The mutex 0 is already locked (needed by the function contract).
      */
     print_text_synchronously("parent", PARENT_INITIAL_MUTEX_ID, 0, LINES_COUNT);
 
