@@ -121,7 +121,7 @@ int main() {
 
 
     /*
-     * This cycle makes sure that child thread started his routine.
+     * This cycle makes sure that child thread started its routine.
      */
     while (!pthread_mutex_trylock(global_mutexes + 2)) {
         pthread_mutex_unlock(global_mutexes + 2);
