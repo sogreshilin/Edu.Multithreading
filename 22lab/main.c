@@ -52,7 +52,8 @@ void cleanup_routine(void* arg) {
     sem_destroy(&module);
 }
 
-void* produce_simple_detail(const char* detail_name, int producing_timeout, sem_t* detail) {
+void* produce_simple_detail(const char* detail_name,
+        int producing_timeout, sem_t* detail) {
     int detail_id = 0;
     sleep(producing_timeout);
     while (global_state == RUNNING) {
@@ -132,9 +133,11 @@ int initialize_all_semaphores() {
     return SUCCESS;
 }
 
-int start_all_producers(pthread_t* producers, void* (*tasks[])(void*), int producer_count) {
+int start_all_producers(pthread_t* producers,
+        void* (*tasks[])(void*), int producer_count) {
     for (int i = 0; i < producer_count; ++i) {
-        int code = pthread_create(producers + i, DEFAULT_ATTR, tasks[i], NO_ARG);
+        int code = pthread_create(producers + i, DEFAULT_ATTR, tasks[i],
+            NO_ARG);
         if (code != SUCCESS) {
             return code;
         }
